@@ -1,0 +1,91 @@
+/* app/assets/styles/glass.css */
+
+:root {
+  /* Highly frosted glass with extreme blur and deeper opacity for maximum occlusion */
+  --glass-blur: blur(40px) saturate(210%);
+  --glass-bg: rgba(11, 14, 26, 0.74);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-shadow: 0 16px 40px 0 rgba(0, 0, 0, 0.65), 0 4px 12px 0 rgba(0, 0, 0, 0.35);
+  --glass-reflection: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 40%, rgba(255, 255, 255, 0) 100%);
+  
+  /* Dimensioning variables requested: 46px height for primary layout units */
+  --glass-unit-size: 46px;
+  --glass-gap: 8px; /* Less gap / denser spacing */
+}
+
+/* Glass element base */
+.glass-panel-unified {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.25s ease, border-color 0.25s ease;
+  cursor: pointer;
+  outline: none;
+}
+
+/* Static reflection sweep without translation */
+.glass-panel-unified::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--glass-reflection);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Removed translation/translating animations from hover, just elegant opacity & bg colour transitions */
+.glass-panel-unified:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+.glass-panel-unified:active {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Circular item - 46px x 46px with absolute symmetry */
+.glass-circle-unified {
+  width: var(--glass-unit-size);
+  height: var(--glass-unit-size);
+  border-radius: 50%;
+  flex-shrink: 0;
+  padding: 1px; /* 1px padding for precise fit constraint */
+}
+
+/* Capsule item - height 46px */
+.glass-capsule-unified {
+  height: var(--glass-unit-size);
+  border-radius: 99px;
+  flex: 1;
+}
+
+/* Precise inside centering for Lucide icons */
+.glass-panel-unified .icon-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.glass-panel-unified .icon-container svg {
+  color: var(--color-text-primary);
+  opacity: 0.85;
+  transition: opacity 0.2s ease;
+  display: block;
+}
+
+.glass-panel-unified:hover .icon-container svg {
+  opacity: 1;
+}

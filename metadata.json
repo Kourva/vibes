@@ -1,0 +1,6 @@
+{
+  "name": "Telegram Glass Chat",
+  "description": "A Telegram-inspired chat interface featuring immersive frosted liquid glass effects with reflection, responsive layout, fluid bubble animations, and scroll-to-bottom controls.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

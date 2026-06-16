@@ -1,0 +1,88 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600;700&display=swap');
+@import './glass.css';
+
+:root {
+  --font-sans: 'Inter', system-ui, -apple-system, sRGB, sans-serif;
+  --font-display: 'Outfit', 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Color Palette */
+  --color-bg-dark: #0e1621;
+  --color-text-primary: #ffffff;
+  --color-text-secondary: rgba(255, 255, 255, 0.65);
+  --color-text-muted: rgba(255, 255, 255, 0.4);
+  
+  /* Tele-glass variables */
+  --glass-bg: rgba(23, 33, 43, 0.85); /* Telegram-style matte chat panel background */
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-shadow: 0 12px 32px 0 rgba(0, 0, 0, 0.45);
+  --glass-blur: blur(25px);
+  --glass-reflection: none;
+  
+  --color-active: #34c759;
+  --color-accent-blue: #2481cc; /* Telegram classic premium blue */
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--color-bg-dark);
+  color: var(--color-text-primary);
+  min-height: 100vh;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Minimalist Patterned Background - Clean Telegram Style */
+.liquid-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  background-color: #0e1621;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1.2px);
+  background-size: 24px 24px;
+}
+
+/* Glass Utility Classes */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  position: relative;
+  overflow: hidden;
+}
+
+.glass-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--glass-reflection);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Custom Scrollbar - Hidden for minimal pure layout */
+::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+* {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
