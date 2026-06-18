@@ -49,7 +49,7 @@ const onMoreClicked = () => {
   left: 0;
   right: 0;
   height: 86px;
-  background: linear-gradient(to bottom, #0d101a 0%, rgba(13, 16, 26, 0.95) 20%, rgba(13, 16, 26, 0.45) 60%, rgba(13, 16, 26, 0) 100%);
+  background: linear-gradient(to bottom, var(--color-bg-dark) 0%, rgba(var(--color-bg-dark-rgb), 0.95) 20%, rgba(var(--color-bg-dark-rgb), 0.45) 60%, rgba(var(--color-bg-dark-rgb), 0) 100%);
   z-index: 4;
   pointer-events: none;
 }

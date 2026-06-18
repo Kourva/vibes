@@ -5,6 +5,7 @@
       :messages="messages" 
       :is-typing="isTyping"
       :emoji-open="emojiOpen"
+      :replying-to="replyingTo"
       @scrollerAttached="onScrollerAttached"
       @reply="setReplyingTo"
       @delete-message="deleteMessage"
@@ -80,7 +81,7 @@ const onScrollerAttached = (el: HTMLElement) => {
   left: 0;
   right: 0;
   height: 115px;
-  background: linear-gradient(to top, #0d101a 0%, rgba(13, 16, 26, 0.96) 28%, rgba(13, 16, 26, 0.5) 65%, rgba(13, 16, 26, 0) 100%);
+  background: linear-gradient(to top, var(--color-bg-dark) 0%, rgba(var(--color-bg-dark-rgb), 0.96) 28%, rgba(var(--color-bg-dark-rgb), 0.5) 65%, rgba(var(--color-bg-dark-rgb), 0) 100%);
   z-index: 4;
   pointer-events: none;
 }

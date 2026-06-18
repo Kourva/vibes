@@ -1,5 +1,5 @@
 <template>
-  <div class="bottom-area-container" :class="{ 'emoji-open': showEmojiSheet }" id="bottom-systems-root">
+  <div class="bottom-area-container" :class="{ 'emoji-open': showEmojiSheet || showAttachMock }" id="bottom-systems-root">
     <!-- Sliding Emoji Bottom Sheet (Functional Drawer) -->
     <Transition name="sheet-slide">
       <div v-if="showEmojiSheet" class="emoji-bottom-sheet" id="emoji-sheet-panel">
@@ -33,6 +33,34 @@
       </div>
     </Transition>
 
+    <!-- Sliding Attachments Bottom Sheet (Artwork Gallery) -->
+    <Transition name="sheet-slide">
+      <div v-if="showAttachMock" class="emoji-bottom-sheet attachment-bottom-sheet" id="attachment-sheet-panel">
+        <div class="sheet-content">
+          <div class="sheet-header">
+            <span class="sheet-title">Aesthetic Artworks Gallery</span>
+            <div class="gallery-desc">Click an artwork to include as an attachment preview</div>
+          </div>
+          <div class="attachment-grid-viewport">
+            <div 
+              v-for="img in mockImageAssets" 
+              :key="img.url" 
+              class="attachment-card"
+              @click="selectAttachmentImage(img.url)"
+            >
+              <div class="attachment-preview-box">
+                <img :src="img.preview" alt="Artwork attachment preview" class="attachment-card-img" />
+              </div>
+              <div class="attachment-meta-info">
+                <div class="attachment-card-title">{{ img.title }}</div>
+                <div class="attachment-card-author">{{ img.author }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
     <div class="three-part-bottom" id="chat-bottom-bar">
       <!-- Left: Single Emoji Action Circle (46px x 46px) -->
       <button 
@@ -49,6 +77,27 @@
 
       <!-- Center: Main Input Field Capsule with Paperclip Inside (Flexible height) -->
       <div class="input-container" id="bottom-actions-center">
+        <!-- Chosen attachment preview badge inside the typewriter capsule -->
+        <Transition name="reply-fade">
+          <div v-if="selectedAttachment" class="input-attachment-bar">
+            <div class="attachment-bar-preview">
+              <img :src="selectedAttachment" alt="Attached preview" class="attachment-bar-img" />
+            </div>
+            <div class="attachment-bar-details">
+              <div class="attachment-bar-title">Photo Attachment</div>
+              <div class="attachment-bar-desc">Ready to send in chat</div>
+            </div>
+            <button 
+              type="button" 
+              class="reply-close-btn flex-container" 
+              @click="clearSelectedAttachment"
+              aria-label="Remove photo"
+            >
+              <X :size="14" />
+            </button>
+          </div>
+        </Transition>
+
         <!-- Reply preview header block inside the input area -->
         <Transition name="reply-fade">
           <div v-if="replyingTo" class="input-reply-bar">
@@ -59,7 +108,7 @@
               <div class="reply-bar-sender" :class="replyingTo.sender">
                 {{ replyingTo.sender === 'me' ? 'You' : replyingTo.senderName || 'Seraphina' }}
               </div>
-              <div class="reply-bar-text">{{ replyingTo.text }}</div>
+              <div class="reply-bar-text">{{ replyingTo.text || (replyingTo.image ? '📷 Photo' : '') }}</div>
             </div>
             <button 
               type="button" 
@@ -100,14 +149,14 @@
       <!-- Right: Send / Voice Circle (46px x 46px) -->
       <button 
         class="bottom-circle action-btn glass-panel-unified glass-circle-unified ripple-on-click" 
-        :class="{ 'send-active': hasText }"
+        :class="{ 'send-active': isSendActive }"
         @click="handleActionClick" 
-        :aria-label="hasText ? 'Send Message' : 'Record Voice'"
+        :aria-label="isSendActive ? 'Send Message' : 'Record Voice'"
         id="btn-right-action"
       >
         <span class="icon-container flex-container">
           <Transition name="icon-fade" mode="out-in">
-            <Send v-if="hasText" class="action-icon" :size="19" key="send-icon" />
+            <Send v-if="isSendActive" class="action-icon" :size="19" key="send-icon" />
             <Mic v-else class="action-icon" :size="19" key="mic-icon" />
           </Transition>
         </span>
@@ -126,7 +175,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'send', text: string): void
+  (e: 'send', text: string, imageUrl?: string): void
   (e: 'emoji-toggle', visible: boolean): void
   (e: 'cancel-reply'): void
   (e: 'notify', text: string): void
@@ -134,10 +183,50 @@ const emit = defineEmits<{
 
 const inputText = ref('')
 const hasText = computed(() => inputText.value.trim().length > 0)
+const selectedAttachment = ref<string | null>(null)
+const isSendActive = computed(() => hasText.value || !!selectedAttachment.value)
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 
 const showEmojiSheet = ref(false)
 const showAttachMock = ref(false)
+
+const clearSelectedAttachment = () => {
+  selectedAttachment.value = null
+}
+
+const selectAttachmentImage = (url: string) => {
+  selectedAttachment.value = url
+  showAttachMock.value = false
+  emit('emoji-toggle', false)
+  emit('notify', 'Image selected! Ready to send. 🖼️')
+}
+
+const mockImageAssets = [
+  {
+    title: 'Warm Twilight Render',
+    author: 'Elena Pavlova',
+    preview: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200&auto=format&fit=crop&q=80',
+    url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80'
+  },
+  {
+    title: 'Prismatic Glow Wave',
+    author: 'Kaelen O\'Neal',
+    preview: 'https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?w=200&auto=format&fit=crop&q=80',
+    url: 'https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?w=600&auto=format&fit=crop&q=80'
+  },
+  {
+    title: 'Neon Mesh Liquid',
+    author: 'Sora Tanaka',
+    preview: 'https://images.unsplash.com/photo-1541701494587-cb58502866ab?w=200&auto=format&fit=crop&q=80',
+    url: 'https://images.unsplash.com/photo-1541701494587-cb58502866ab?w=600&auto=format&fit=crop&q=80'
+  },
+  {
+    title: 'Glass Reflection Bloom',
+    author: 'Aria Sterling',
+    preview: 'https://images.unsplash.com/photo-1618005198143-d366763f04f2?w=200&auto=format&fit=crop&q=80',
+    url: 'https://images.unsplash.com/photo-1618005198143-d366763f04f2?w=600&auto=format&fit=crop&q=80'
+  }
+]
 
 // Focus input whenever reply is activated to mimic high-fidelity chat experience
 watch(() => props.replyingTo, (newMsg) => {
@@ -205,11 +294,8 @@ const toggleAttachMock = () => {
   showAttachMock.value = !showAttachMock.value
   if (showEmojiSheet.value) {
     showEmojiSheet.value = false
-    emit('emoji-toggle', false)
   }
-  if (showAttachMock.value) {
-    triggerAlert('File attachment selector requested (Design Interface Mock)')
-  }
+  emit('emoji-toggle', showAttachMock.value)
 }
 
 const adjustHeight = () => {
@@ -227,9 +313,11 @@ watch(inputText, async () => {
 
 const handleSend = () => {
   const text = inputText.value.trim()
-  if (text) {
-    emit('send', text)
+  const image = selectedAttachment.value
+  if (text || image) {
+    emit('send', text, image || undefined)
     inputText.value = ''
+    selectedAttachment.value = null
     if (showEmojiSheet.value) {
       showEmojiSheet.value = false
       emit('emoji-toggle', false)
@@ -251,7 +339,7 @@ const handleKeyDown = (e: KeyboardEvent) => {
 }
 
 const handleActionClick = () => {
-  if (hasText.value) {
+  if (isSendActive.value) {
     handleSend()
   } else {
     triggerAlert('Hold to record voice (Design Interface Mock)')
@@ -655,6 +743,139 @@ const handleActionClick = () => {
   opacity: 0;
   transform: translateY(-4px);
   margin-bottom: -28px;
+}
+
+/* Attachment bottom gallery drawer */
+.attachment-bottom-sheet {
+  background: rgba(14, 21, 37, 0.85) !important;
+}
+
+.gallery-desc {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  opacity: 0.8;
+  margin-top: 1px;
+}
+
+.attachment-grid-viewport {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  padding: 14px 16px 20px 16px;
+  overflow-y: auto;
+  max-height: 200px;
+}
+
+.attachment-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.attachment-card:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+  transform: translateY(-2px);
+}
+
+.attachment-preview-box {
+  width: 100%;
+  height: 80px;
+  overflow: hidden;
+}
+
+.attachment-card-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.attachment-card:hover .attachment-card-img {
+  transform: scale(1.05);
+}
+
+.attachment-meta-info {
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+.attachment-card-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.attachment-card-author {
+  font-size: 9.5px;
+  color: var(--color-text-secondary);
+  opacity: 0.7;
+}
+
+/* Selected attachment preview bar inside typewriter wrapper */
+.input-attachment-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 8px;
+  margin-bottom: 6px;
+  width: 100%;
+  position: relative;
+  animation: replySlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.attachment-bar-preview {
+  width: 38px;
+  height: 38px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.attachment-bar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.attachment-bar-details {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.attachment-bar-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.attachment-bar-desc {
+  font-size: 10.5px;
+  color: var(--color-active);
+  font-weight: 500;
+}
+
+@keyframes replySlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>
 

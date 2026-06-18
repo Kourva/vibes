@@ -1,5 +1,5 @@
 <template>
-  <div class="chat-viewport-wrapper" :class="{ 'emoji-open': emojiOpen, 'has-pinned-bar': !!pinnedMessage }">
+  <div class="chat-viewport-wrapper" :class="{ 'emoji-open': emojiOpen, 'has-pinned-bar': !!pinnedMessage, 'has-reply-bar': !!replyingTo }">
     <!-- Dynamic Telegram-style Top Pinned Bar -->
     <Transition name="pin-bar-slide">
       <div v-if="pinnedMessage" class="pinned-message-bar">
@@ -8,8 +8,17 @@
         </div>
         <div class="pinned-text-area" @click="scrollToMessage(pinnedMessage.id)">
           <div class="pinned-header">Pinned Message</div>
-          <div class="pinned-preview-line">{{ pinnedMessage.text }}</div>
+          <div class="pinned-preview-line">
+            <template v-if="pinnedMessage.image && !pinnedMessage.text">📷 Photo</template>
+            <template v-else>{{ pinnedMessage.text }}</template>
+          </div>
         </div>
+
+        <!-- Premium mini image thumbnail inside pinned bar -->
+        <div v-if="pinnedMessage.image" class="pinned-mini-thumb" @click="scrollToMessage(pinnedMessage.id)">
+          <img :src="pinnedMessage.image" alt="Pinned thumbnail" />
+        </div>
+
         <button class="unpin-action-btn flex-container" @click="pinnedMessage = null" aria-label="Unpin message">
           <X :size="14" />
         </button>
@@ -23,76 +32,104 @@
       id="chat-messages-container"
     >
       <div class="bubbles-list">
-        <!-- Staggered transition list -->
-        <TransitionGroup name="bubble" tag="div" class="bubbles-wrapper">
-          <div 
-            v-for="msg in messages" 
-            :id="'msg-' + msg.id"
-            :key="msg.id" 
-            :class="[
-              'bubble-item', 
-              msg.sender,
-              { 
-                'menu-active': contextMenu.visible && contextMenu.message?.id === msg.id,
-                'pinned-ref': pinnedMessage?.id === msg.id
-              }
-            ]"
-          >
-            <!-- Message Bubble Panel -->
+        <!-- Scroll Spacer bottom alignment layout spring -->
+        <div class="scroll-spacer"></div>
+
+        <!-- Dynamic Date Segments / Timeline -->
+        <div v-for="segment in groupedMessageSegments" :key="segment.date" class="message-segment-group">
+          <!-- Perfectly Positioned Sticky Date Card Header -->
+          <div class="sticky-date-divider-wrapper">
+            <span class="sticky-date-divider-badge">{{ segment.date }}</span>
+          </div>
+
+          <!-- Staggered transition list inside date segment -->
+          <TransitionGroup name="bubble" tag="div" class="bubbles-wrapper">
             <div 
-              class="bubble-glass" 
-              :class="msg.sender"
-              @click.stop="openContextMenu($event, msg)"
-              @contextmenu.stop.prevent="openContextMenu($event, msg)"
+              v-for="(msg, idx) in segment.messages" 
+              :id="'msg-' + msg.id"
+              :key="msg.id" 
+              :class="[
+                'bubble-item', 
+                msg.sender,
+                { 
+                  'menu-active': contextMenu.visible && contextMenu.message?.id === msg.id,
+                  'pinned-ref': pinnedMessage?.id === msg.id,
+                  'first-of-group': isFirstOfGroup(segment.messages, msg, idx),
+                  'last-of-group': isLastOfGroup(segment.messages, msg, idx)
+                }
+              ]"
             >
-              <span class="reflection-glow"></span>
-              
-              <!-- Telegram-style Reply Header Reference block -->
+              <!-- Beautiful Telegram Avatar slot (only shown in Group chats on LHS other user messages) -->
+              <div v-if="activeChat?.isGroup && msg.sender === 'them'" class="bubble-avatar-slot" id="msg-avatar-container">
+                <div 
+                  v-if="isLastOfGroup(segment.messages, msg, idx)" 
+                  class="bubble-avatar-circle"
+                  :style="{ background: profile.avatarColor }"
+                >
+                  {{ profile.avatar }}
+                </div>
+                <div v-else class="bubble-avatar-spacer"></div>
+              </div>
+
+              <!-- Message Bubble Panel -->
               <div 
-                v-if="msg.replyTo" 
-                class="reply-ref-card" 
-                :class="msg.replyTo.sender"
-                @click.stop="scrollToMessage(msg.replyTo.id)"
+                class="bubble-glass" 
+                :class="[msg.sender, { 'has-image': !!msg.image, 'image-only': !!msg.image && !msg.text }]"
+                @click.stop="openContextMenu($event, msg)"
+                @contextmenu.stop.prevent="openContextMenu($event, msg)"
               >
-                <div class="reply-ref-content">
-                  <div class="reply-ref-sender">{{ msg.replyTo.senderName }}</div>
-                  <div class="reply-ref-text">{{ msg.replyTo.text }}</div>
+                <span class="reflection-glow"></span>
+                
+                <!-- Display sender's name inside bubble in Group Chat if first of the speaker's sequence -->
+                <div 
+                  v-if="activeChat?.isGroup && msg.sender === 'them' && isFirstOfGroup(segment.messages, msg, idx) && msg.senderName"
+                  class="bubble-sender-name"
+                  :style="{ color: getSenderColor(msg.senderName) }"
+                >
+                  {{ msg.senderName }}
+                </div>
+
+                <!-- Telegram-style Reply Header Reference block -->
+                <div 
+                  v-if="msg.replyTo" 
+                  class="reply-ref-card" 
+                  :class="msg.replyTo.sender"
+                  @click.stop="scrollToMessage(msg.replyTo.id)"
+                >
+                  <div class="reply-ref-content">
+                    <div class="reply-ref-sender" :style="{ color: msg.replyTo.sender === 'them' ? getSenderColor(msg.replyTo.senderName) : '#2481cc' }">{{ msg.replyTo.senderName }}</div>
+                    <div class="reply-ref-text">{{ msg.replyTo.text || '📷 Photo' }}</div>
+                  </div>
+                </div>
+                
+                <!-- Image attachment container -->
+                <div v-if="msg.image" class="bubble-image-container">
+                  <img :src="msg.image" alt="Aesthetic artwork" class="bubble-attached-image" @click.stop="openImageFullscreen(msg.image)" />
+                </div>
+
+                <div v-if="msg.text" class="bubble-text">{{ msg.text }}</div>
+                
+                <!-- Metadata & Indicators -->
+                <div class="bubble-meta">
+                  <span class="bubble-time">{{ msg.time }}</span>
+                  <span class="pinned-indicator-inline" v-if="pinnedMessage?.id === msg.id">
+                    <Pin :size="10" />
+                  </span>
+                  
+                  <!-- Check icons for my messages -->
+                  <span v-if="msg.sender === 'me'" class="status-indicator">
+                    <Check v-if="msg.status === 'sent'" class="check-icon" :size="16" />
+                    <CheckCheck v-else-if="msg.status === 'read'" class="check-icon read" :size="16" />
+                    <Loader v-else-if="msg.status === 'sending'" class="check-icon spin" :size="16" />
+                  </span>
                 </div>
               </div>
-              
-              <div class="bubble-text">{{ msg.text }}</div>
-              
-              <!-- Metadata & Indicators -->
-              <div class="bubble-meta">
-                <span class="pinned-indicator-inline" v-if="pinnedMessage?.id === msg.id">
-                  <Pin :size="10" />
-                </span>
-                <span class="bubble-time">{{ msg.time }}</span>
-                
-                <!-- Check icons for my messages -->
-                <span v-if="msg.sender === 'me'" class="status-indicator">
-                  <Check v-if="msg.status === 'sent'" class="check-icon" :size="13" />
-                  <CheckCheck v-else-if="msg.status === 'read'" class="check-icon read" :size="13" />
-                  <Loader v-else-if="msg.status === 'sending'" class="check-icon spin" :size="13" />
-                </span>
-              </div>
             </div>
-          </div>
-        </TransitionGroup>
+          </TransitionGroup>
+        </div>
  
-        <!-- Glassy Animated Typing Indicator -->
-        <Transition name="fade">
-          <div v-if="isTyping" class="bubble-item them typing-item">
-            <div class="bubble-glass typing-bubble">
-              <span class="reflection-glow"></span>
-              <div class="typing-indicator">
-                <span class="dot"></span>
-                <span class="dot"></span>
-                <span class="dot"></span>
-              </div>
-            </div>
-          </div>
-        </Transition>
+        <!-- Custom dynamic bottom spacer to perfectly clear the glass input and elements below without relying on CSS padding inside display: flex -->
+        <div class="bottom-clear-spacer"></div>
       </div>
     </div>
  
@@ -140,20 +177,35 @@
         </span>
       </button>
     </Transition>
+
+    <!-- High-fidelity Lightbox Image Fullscreen Slider / Viewer Overlay -->
+    <Transition name="fade">
+      <div v-if="fullscreenImage" class="image-lightbox-overlay" @click="closeImageFullscreen">
+        <button class="lightbox-close-btn flex-container" @click="closeImageFullscreen" aria-label="Close Preview">
+          <X :size="24" />
+        </button>
+        <div class="lightbox-content" @click.stop>
+          <img :src="fullscreenImage" alt="Fullscreen preview" class="lightbox-main-img" />
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
  
 <script setup lang="ts">
-import { ref, onMounted, nextTick, watch } from 'vue'
+import { ref, onMounted, nextTick, watch, computed } from 'vue'
 import { Check, CheckCheck, Loader, ArrowDown, CornerUpLeft, Pin, Trash2, Copy, X } from 'lucide-vue-next'
+import { useChat } from '~/composables/useChat'
 import type { Message } from '~/composables/useChat'
  
 const props = withDefaults(defineProps<{
   messages: Message[]
   isTyping: boolean
   emojiOpen?: boolean
+  replyingTo?: Message | null
 }>(), {
-  emojiOpen: false
+  emojiOpen: false,
+  replyingTo: null
 })
  
 const emit = defineEmits<{
@@ -163,6 +215,53 @@ const emit = defineEmits<{
   (e: 'notify', text: string): void
 }>()
  
+const { profile, activeChat } = useChat()
+
+// Group messages dynamically by their date (Today, Yesterday, etc.)
+const groupedMessageSegments = computed(() => {
+  const segments: { date: string; messages: Message[] }[] = []
+  props.messages.forEach(msg => {
+    const d = msg.date || 'Today'
+    let lastSegment = segments[segments.length - 1]
+    if (!lastSegment || lastSegment.date !== d) {
+      lastSegment = { date: d, messages: [] }
+      segments.push(lastSegment)
+    }
+    lastSegment.messages.push(msg)
+  })
+  return segments
+})
+
+// Auto-assign beautiful colored names inside group bubbles, matching Telegram's high-fidelity theme
+const getSenderColor = (name?: string) => {
+  if (!name) return '#2481cc'
+  const colors = [
+    '#3498db', // Blue
+    '#2ecc71', // Emerald Green
+    '#e67e22', // Orange/Amber
+    '#9b59b6', // Amethyst purple
+    '#e74c3c', // Red/Crimson
+    '#1abc9c', // Teal Turquoise
+    '#f1c40f'  // Warm Gold
+  ]
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  const index = Math.abs(hash) % colors.length
+  return colors[index]
+}
+ 
+const isFirstOfGroup = (groupMessages: Message[], msg: Message, idx: number) => {
+  if (idx === 0) return true
+  return groupMessages[idx - 1].sender !== msg.sender
+}
+
+const isLastOfGroup = (groupMessages: Message[], msg: Message, idx: number) => {
+  if (idx === groupMessages.length - 1) return true
+  return groupMessages[idx + 1].sender !== msg.sender
+}
+
 const scrollArea = ref<HTMLElement | null>(null)
 const showScrollFab = ref(false)
 
@@ -181,6 +280,15 @@ const contextMenu = ref<{
 
 // Pinned Message state
 const pinnedMessage = ref<Message | null>(null)
+
+// Fullscreen Image Lightbox state
+const fullscreenImage = ref<string | null>(null)
+const openImageFullscreen = (url: string) => {
+  fullscreenImage.value = url
+}
+const closeImageFullscreen = () => {
+  fullscreenImage.value = null
+}
 
 const showToast = (text: string) => {
   emit('notify', text)
@@ -339,19 +447,36 @@ onMounted(() => {
 .messages-scroll-area {
   flex: 1;
   width: 100%;
-  /* Increased padding to avoid header/footer collisions with the expanded 46px elements */
-  padding: 74px 16px 112px 16px; 
+  /* Comfortable 92px top padding matches header, bottom spacing is managed dynamically via .bottom-clear-spacer */
+  padding: 92px 16px 0 16px; 
   overflow-y: auto;
   overflow-x: hidden;
   position: relative;
   z-index: 1; /* Keep underlying elements in low stacking context so absolute FAB retreats under input actions */
   scroll-behavior: smooth;
   scroll-padding-bottom: 24px;
-  transition: padding-bottom 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
 }
 
-.chat-viewport-wrapper.emoji-open .messages-scroll-area {
-  padding-bottom: 362px; /* 112px original + 250px emoji sheet height */
+/* Dynamic space Allocation for bottom controls to prevent layout clipping */
+.bottom-clear-spacer {
+  height: 112px; /* clears standard glass bar + extra padding */
+  width: 100%;
+  flex-shrink: 0;
+  transition: height 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.chat-viewport-wrapper.has-reply-bar .bottom-clear-spacer {
+  height: 152px; /* clears glass bar + reply preview block + extra padding */
+}
+
+.chat-viewport-wrapper.emoji-open .bottom-clear-spacer {
+  height: 362px; /* clears elevated standard glass bar with emoji sheet + extra padding */
+}
+
+.chat-viewport-wrapper.emoji-open.has-reply-bar .bottom-clear-spacer {
+  height: 402px; /* clears elevated glass bar + reply preview block + emoji sheet + extra padding */
 }
 
 /* Hide scrollbar fully across all engines */
@@ -368,20 +493,33 @@ onMounted(() => {
   flex-direction: column;
   width: 100%;
   max-width: 600px;
-  margin: 0 auto;
+  margin-left: auto;
+  margin-right: auto;
+  flex: 1;
+  min-height: 100%;
+}
+
+.scroll-spacer {
+  flex: 1;
+  min-height: 0;
 }
 
 .bubbles-wrapper {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 3px; /* tight Telegram-style group spacing */
 }
 
 /* Individual Alignments */
 .bubble-item {
   display: flex;
   width: 100%;
-  margin-bottom: 2px;
+  align-items: flex-end; /* perfectly aligns avatar and bubble at baseline */
+}
+
+/* Standard gap between different speakers */
+.bubble-item.last-of-group {
+  margin-bottom: 10px;
 }
 
 .bubble-item.them {
@@ -395,11 +533,15 @@ onMounted(() => {
 /* Base Bubble Style with Matte/Minimal design (No Glass Reflections, no steel look) */
 .bubble-glass {
   max-width: 75%;
-  padding: 10px 14px 6px 14px;
+  padding: 10px 5px 6px 5px; /* Symmetrical 5px left/right padding as requested */
   position: relative;
-  overflow: hidden;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  overflow: visible; /* Allows beautiful message tails to extend outside the box */
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
   transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.bubble-glass.has-image {
+  overflow: hidden; /* Clips image and reply reference blocks neatly */
 }
 
 /* Hide reflection effects inside matte bubbles */
@@ -407,11 +549,14 @@ onMounted(() => {
   display: none !important;
 }
 
-/* Them Bubble styling: Elegant solid soft dark-slate/navy, left-aligned standard curve */
+/* --- TELEGRAM GROUP CORNERS AND SHAPES --- */
+
+/* Them Bubble (Incoming, left-aligned): Blue-gray slate */
 .bubble-glass.them {
   background: #182533;
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  border-radius: 16px 16px 16px 4px;
+  border-style: var(--message-border-style, solid);
+  border-width: var(--message-border-width, 1px);
+  border-color: rgba(255, 255, 255, 0.05);
   color: #f5f5f7;
 }
 
@@ -419,16 +564,204 @@ onMounted(() => {
   background: #1c2b3b;
 }
 
-/* Me Bubble styling: Elegant custom matte Telegram solid blue (simple and minimal) */
+/* Default corners for them */
+.bubble-item.them .bubble-glass {
+  border-radius: var(--message-radius-val, 16px);
+}
+/* First of group (sequence of same sender): nicely rounded edges, slight flatten on joining edge */
+.bubble-item.them.first-of-group:not(.last-of-group) .bubble-glass {
+  border-radius: var(--message-radius-val, 16px) var(--message-radius-val, 16px) var(--message-radius-val, 16px) var(--message-radius-small, 6px);
+}
+/* Middle of group: flat top and bottom left corners so they fuse into a single solid capsule block */
+.bubble-item.them:not(.first-of-group):not(.last-of-group) .bubble-glass {
+  border-radius: var(--message-radius-small, 6px) var(--message-radius-val, 16px) var(--message-radius-val, 16px) var(--message-radius-small, 6px);
+}
+/* Last of group has the pointed baseline corner tail at the bottom left */
+.bubble-item.them.last-of-group:not(.first-of-group) .bubble-glass {
+  border-radius: var(--message-radius-small, 6px) var(--message-radius-val, 16px) var(--message-radius-val, 16px) 4px;
+}
+/* Single message (both first and last): pointed bottom left tail */
+.bubble-item.them.first-of-group.last-of-group .bubble-glass {
+  border-radius: var(--message-radius-val, 16px) var(--message-radius-val, 16px) var(--message-radius-val, 16px) 4px;
+}
+
+/* Consecutive group message border merging so adjacent borders do not crowd */
+.bubble-item.them:not(.first-of-group) .bubble-glass {
+  border-top-color: transparent !important;
+}
+.bubble-item.them:not(.last-of-group) .bubble-glass {
+  border-bottom-color: transparent !important;
+}
+
+/* Curve elements for solid dynamic tails */
+.bubble-item.them.last-of-group .bubble-glass::before {
+  content: "";
+  position: absolute;
+  bottom: 0px;
+  left: -5px;
+  width: 10px;
+  height: 12px;
+  background: #182533;
+  border-bottom-left-radius: 10px 14px;
+  z-index: -1;
+  pointer-events: none;
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  transition: background-color 0.2s ease;
+}
+.bubble-item.them.last-of-group .bubble-glass:hover::before {
+  background: #1c2b3b;
+}
+
+
+/* Me Bubble (Outgoing, right-aligned): Premium Telegram solid blue */
 .bubble-glass.me {
-  background: #2b5278; /* Premium Telegram Blue */
-  border: none;
-  border-radius: 16px 16px 4px 16px;
+  background: #2b5278;
+  border-style: var(--message-border-style, solid);
+  border-width: var(--message-border-width, 1px);
+  border-color: rgba(255, 255, 255, 0.05);
   color: #ffffff;
 }
 
 .bubble-glass.me:hover {
   background: #2e5881;
+}
+
+/* Default corners for me */
+.bubble-item.me .bubble-glass {
+  border-radius: var(--message-radius-val, 16px);
+}
+/* First of group: bottom right joining edge gets a flat transition */
+.bubble-item.me.first-of-group:not(.last-of-group) .bubble-glass {
+  border-radius: var(--message-radius-val, 16px) var(--message-radius-val, 16px) var(--message-radius-small, 6px) var(--message-radius-val, 16px);
+}
+/* Middle of group: flat top and bottom right to slide seamlessly between other cells */
+.bubble-item.me:not(.first-of-group):not(.last-of-group) .bubble-glass {
+  border-radius: var(--message-radius-val, 16px) var(--message-radius-small, 6px) var(--message-radius-small, 6px) var(--message-radius-val, 16px);
+}
+/* Last of group: tail on the bottom right corner */
+.bubble-item.me.last-of-group:not(.first-of-group) .bubble-glass {
+  border-radius: var(--message-radius-val, 16px) var(--message-radius-small, 6px) 4px var(--message-radius-val, 16px);
+}
+/* Single message: pointed bottom right tail */
+.bubble-item.me.first-of-group.last-of-group .bubble-glass {
+  border-radius: var(--message-radius-val, 16px) var(--message-radius-val, 16px) 4px var(--message-radius-val, 16px);
+}
+
+/* Consecutive group message border merging for outgoing bubbles */
+.bubble-item.me:not(.first-of-group) .bubble-glass {
+  border-top-color: transparent !important;
+}
+.bubble-item.me:not(.last-of-group) .bubble-glass {
+  border-bottom-color: transparent !important;
+}
+
+/* Outgoing sender tail */
+.bubble-item.me.last-of-group .bubble-glass::before {
+  content: "";
+  position: absolute;
+  bottom: 0px;
+  right: -5px;
+  width: 10px;
+  height: 12px;
+  background: #2b5278;
+  border-bottom-right-radius: 10px 14px;
+  z-index: -1;
+  pointer-events: none;
+  clip-path: polygon(0 0, 0 100%, 100% 100%);
+  transition: background-color 0.2s ease;
+}
+.bubble-item.me.last-of-group .bubble-glass:hover::before {
+  background: #2e5881;
+}
+
+
+/* --- TIMELINE DATE DIVIDERS --- */
+.message-segment-group {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.sticky-date-divider-wrapper {
+  position: relative; /* Normal position relative matching user flow without floating/sticking */
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 14px 0 10px 0;
+  pointer-events: none;
+}
+
+.sticky-date-divider-badge {
+  background: rgba(15, 20, 31, 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 600;
+  color: #a4acb9;
+  padding: 4px 14px;
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  text-transform: capitalize;
+  user-select: none;
+  animation: badge-fade-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes badge-fade-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* --- GROUP SENDER NAME COLORIZED TAG --- */
+.bubble-sender-name {
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 2px;
+  cursor: pointer;
+  user-select: none;
+  font-family: var(--font-display);
+}
+.bubble-sender-name:hover {
+  text-decoration: underline;
+}
+
+
+/* --- AVATAR CHIP LAYOUT --- */
+.bubble-avatar-slot {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 10px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.bubble-avatar-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.bubble-avatar-circle:hover {
+  transform: scale(1.08) rotate(2deg);
+}
+
+.bubble-avatar-spacer {
+  width: 32px;
+  height: 32px;
 }
 
 /* Text formatting inside bubble */
@@ -450,16 +783,31 @@ onMounted(() => {
   justify-content: flex-end;
   gap: 4px;
   margin-top: 4px;
-  font-size: 10px;
-  opacity: 0.6;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.16);
+  width: fit-content;
+  margin-left: auto; /* pulls capsule cleanly to the right */
+  font-size: 9.5px;
+  opacity: 0.85;
   text-align: right;
   z-index: 2;
   position: relative;
   user-select: none;
+  border: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.pinned-indicator-inline {
+  color: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  transform: rotate(35deg); /* aesthetic telegram-style pin slant */
+  margin-left: 1px;
 }
 
 .bubble-time {
   font-family: var(--font-sans);
+  color: rgba(255, 255, 255, 0.75);
 }
 
 .status-indicator {
@@ -468,11 +816,13 @@ onMounted(() => {
 }
 
 .check-icon {
-  color: rgba(255, 255, 255, 0.5);
+  color: #ffffff;
+  opacity: 0.95;
 }
 
 .check-icon.read {
-  color: #34c759; /* Bright elegant green checkmark */
+  color: #ffffff;
+  opacity: 0.95;
 }
 
 .check-icon.spin {
@@ -890,5 +1240,174 @@ onMounted(() => {
 .pin-bar-slide-leave-to {
   transform: translateY(-16px);
   opacity: 0;
+}
+
+/* Styling for bubble when it has an image attachment */
+.bubble-glass.has-image {
+  padding: 0 !important;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.bubble-glass.has-image .bubble-sender-name {
+  padding: 8px 12px 2px 12px;
+  margin-bottom: 0;
+}
+
+.bubble-glass.has-image .reply-ref-card {
+  margin: 8px 12px 4px 12px;
+}
+
+.bubble-image-container {
+  width: 100%;
+  max-width: 320px;
+  max-height: 240px;
+  overflow: hidden;
+  position: relative;
+  cursor: pointer;
+  border-radius: 0 !important; /* No rounded borders on the image */
+  display: block;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.bubble-glass.image-only {
+  position: relative;
+}
+
+.bubble-glass.image-only .bubble-image-container {
+  border-radius: 0 !important;
+}
+
+.bubble-attached-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  display: block;
+  border-radius: 0 !important; /* Flat borders as requested */
+}
+
+.bubble-image-container:hover .bubble-attached-image {
+  transform: scale(1.03);
+}
+
+/* Caption and meta container styling when image is present */
+.bubble-glass.has-image .bubble-text {
+  padding: 8px 12px 6px 12px;
+}
+
+.bubble-glass.has-image .bubble-meta {
+  margin: 0 12px 8px auto;
+  padding: 2px 6px;
+}
+
+/* Float absolute capsule overlay in bottom-right corner for image-only messages */
+.bubble-glass.image-only .bubble-meta {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  margin: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 2px 6px;
+  z-index: 5;
+}
+
+/* Image Fullscreen Lightbox Overlay Style */
+.image-lightbox-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(8, 12, 21, 0.9);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.3s ease;
+  pointer-events: auto;
+}
+
+.lightbox-content {
+  max-width: 85vw;
+  max-height: 80vh;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  animation: lightboxZoom 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.lightbox-main-img {
+  max-width: 100%;
+  max-height: 80vh;
+  object-fit: contain;
+  display: block;
+}
+
+.lightbox-close-btn {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  cursor: pointer;
+  color: #ffffff;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  z-index: 1010;
+}
+
+.lightbox-close-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: rotate(90deg);
+}
+
+@keyframes lightboxZoom {
+  0% {
+    opacity: 0;
+    transform: scale(0.9) translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Premium image thumbnail inside top pinned message bar */
+.pinned-mini-thumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 2px;
+  flex-shrink: 0;
+}
+
+.pinned-mini-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 </style>

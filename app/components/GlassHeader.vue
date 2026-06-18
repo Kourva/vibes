@@ -1,5 +1,5 @@
 <template>
-  <header class="three-part-header" :class="{ 'no-left-action': !active, 'search-mode': showSearch && !active }" id="chat-header">
+  <header class="three-part-header" :class="{ 'no-left-action': !active, 'search-mode': showSearch && !active, 'chat-search-active': active && isSearchOpen }" id="chat-header">
     <!-- Left: Back Button Circle (46px x 46px) -->
     <button 
       v-if="active"
@@ -24,14 +24,14 @@
           </div>
           <span 
             class="status-dot" 
-            :class="{ typing: profile?.status === 'typing...' }"
+            :class="{ typing: profile?.status?.includes('typing...') }"
           ></span>
         </div>
         
         <!-- User Details -->
         <div class="details">
           <h1 class="user-name">{{ profile?.name }}</h1>
-          <span class="user-status" :class="{ typing: profile?.status === 'typing...' }">
+          <span class="user-status" :class="{ typing: profile?.status?.includes('typing...') }">
             {{ profile?.status }}
           </span>
         </div>
@@ -49,25 +49,25 @@
     <!-- Right: Grouped Actions (Search & 3-dot menu) or Active Inline Expanded Search Input -->
     <div 
       class="header-actions-right glass-panel-unified glass-capsule-unified" 
-      :class="{ 'search-expanded': showSearch && !active }"
+      :class="{ 'search-expanded': isSearchOpen }"
       id="header-actions-right"
     >
-      <div v-if="showSearch && !active" class="header-search-box">
-        <Search :size="15" class="search-box-icon" />
+      <div v-if="isSearchOpen" class="header-search-box">
+        <Search :size="19" class="search-box-icon" />
         <input 
-          v-model="searchQuery" 
+          v-model="currentSearchQuery" 
           type="text" 
           placeholder="Search..." 
           class="header-search-input"
-          @keydown.esc="showSearch = false; searchQuery = ''"
+          @keydown.esc="isSearchOpen = false; currentSearchQuery = ''"
           ref="searchInputRef"
         />
-        <button @click="showSearch = false; searchQuery = ''" class="search-close-btn" aria-label="Close search">
-          <X :size="14" />
+        <button @click="isSearchOpen = false; currentSearchQuery = ''" class="search-close-btn" aria-label="Close search">
+          <X :size="19" />
         </button>
       </div>
       <template v-else>
-        <button class="action-btn-item ripple" aria-label="Search Messages" id="btn-search" @click="showSearch = true">
+        <button class="action-btn-item ripple" aria-label="Search Messages" id="btn-search" @click="isSearchOpen = true">
           <Search :size="19" />
         </button>
         <button class="action-btn-item ripple" aria-label="More Options" id="btn-more" @click="$emit('more')">
@@ -79,10 +79,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
+import { ref, watch, nextTick, computed } from 'vue'
 import { ArrowLeft, Search, MoreVertical, X } from 'lucide-vue-next'
 import { useChat } from '~/composables/useChat'
 import type { UserProfile } from '~/composables/useChat'
+import { gsap } from 'gsap'
 
 const props = defineProps<{
   profile?: UserProfile
@@ -90,17 +91,50 @@ const props = defineProps<{
   conversationCount?: number
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'back'): void
   (e: 'menu'): void
   (e: 'more'): void
+  (e: 'search', query: string): void
 }>()
 
-const { showSearch, searchQuery } = useChat()
+const { showSearch: globalShowSearch, searchQuery: globalSearchQuery } = useChat()
+
+// Separate independent local search state for the active chat page header
+const localShowSearch = ref(false)
+const localSearchQuery = ref('')
+
+const isSearchOpen = computed({
+  get() {
+    return props.active ? localShowSearch.value : globalShowSearch.value
+  },
+  set(val) {
+    if (props.active) {
+      localShowSearch.value = val
+    } else {
+      globalShowSearch.value = val
+    }
+  }
+})
+
+const currentSearchQuery = computed({
+  get() {
+    return props.active ? localSearchQuery.value : globalSearchQuery.value
+  },
+  set(val) {
+    if (props.active) {
+      localSearchQuery.value = val
+      emit('search', val)
+    } else {
+      globalSearchQuery.value = val
+    }
+  }
+})
+
 const searchInputRef = ref<HTMLInputElement | null>(null)
 
-watch(showSearch, async (val) => {
-  if (val && !props.active) {
+watch(isSearchOpen, async (val) => {
+  if (val) {
     await nextTick()
     searchInputRef.value?.focus()
   }
@@ -145,6 +179,93 @@ watch(showSearch, async (val) => {
 .three-part-header.search-mode .header-capsule {
   flex: 0 1 120px;
   opacity: 0.6;
+}
+
+/* Chat Search Active: Collapse the profile details completely to show ONLY the avatar with perfect symmetric center padding */
+.three-part-header.chat-search-active .header-capsule {
+  flex: 0 0 46px !important;
+  width: 46px !important;
+  height: 46px !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  overflow: hidden;
+}
+
+.three-part-header.chat-search-active .status-dot {
+  display: none !important;
+}
+
+.three-part-header.chat-search-active .header-capsule .details {
+  display: none !important;
+}
+
+.three-part-header.chat-search-active .profile-content {
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  gap: 0 !important;
+}
+
+.three-part-header.chat-search-active .avatar-container {
+  margin: 0 !important;
+  padding: 0 !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Stacked stories block in header capsule */
+.header-stories-stack {
+  display: flex;
+  align-items: center;
+  width: 70px;
+  height: 38px;
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-left: 2px;
+}
+
+.header-story-circle {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  position: absolute;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+}
+
+.story-ring-gradient {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  padding: 1.5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.header-story-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.2px solid rgba(13, 17, 30, 0.95);
+}
+
+/* Move the details (Chats title) rightward when stories are showing */
+.details.has-stories-offset {
+  margin-left: 8px;
+  transition: margin-left 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .profile-content {
@@ -254,10 +375,10 @@ watch(showSearch, async (val) => {
 
 /* Search expanded styling */
 .header-actions-right.search-expanded {
-  width: 200px;
   flex: 1 1 auto !important;
-  max-width: 240px;
-  padding: 0 8px;
+  width: auto;
+  max-width: none;
+  padding: 0 12px;
   justify-content: flex-start;
 }
 

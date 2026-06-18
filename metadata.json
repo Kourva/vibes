@@ -1,6 +1,6 @@
 {
-  "name": "Telegram Glass Chat",
-  "description": "A Telegram-inspired chat interface featuring immersive frosted liquid glass effects with reflection, responsive layout, fluid bubble animations, and scroll-to-bottom controls.",
+  "name": "Vibes",
+  "description": "Vibes is a Telegram-inspired premium chat application featuring immersive frosted liquid glass aesthetics, advanced real-time simulated conversations, fluid physics-based gestures, and contextual animations.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

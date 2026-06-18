@@ -3,7 +3,7 @@
     <!-- Atmospheric Moving Liquid Background -->
     <div class="liquid-bg"></div>
     
-    <!-- Core Telegram Glass Chat Shell -->
+    <!-- Core Vibes Glass Chat Shell -->
     <main class="chat-shell" id="chat-desktop-frame">
       <NuxtLayout>
         <NuxtPage />
@@ -21,7 +21,7 @@
     <!-- Info Tag for desktop viewports to showcase responsive layout -->
     <div class="interactive-tag-overlay" id="interactive-credits">
       <span class="status-indicator-light"></span>
-      <span class="tag-label">Telegram Liquid Glass UI Mockup • Nuxt 4</span>
+      <span class="tag-label">Vibes • Telegram-Inspired Glass UI Engine</span>
     </div>
   </div>
 </template>
